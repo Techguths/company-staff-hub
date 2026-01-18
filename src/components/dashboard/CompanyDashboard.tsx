@@ -1,9 +1,16 @@
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useData } from '@/contexts/DataContext';
 import StatCard from './StatCard';
 import SessionCard from './SessionCard';
 import StudentListItem from './StudentListItem';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AddStudentDialog } from '@/components/dialogs/AddStudentDialog';
+import { CreateSessionDialog } from '@/components/dialogs/CreateSessionDialog';
+import { StartSessionDialog } from '@/components/dialogs/StartSessionDialog';
+import { ProfileDetailDialog } from '@/components/dialogs/ProfileDetailDialog';
+import { Session, Student } from '@/hooks/useSimulatedData';
 import { 
   GraduationCap, 
   Users, 
@@ -13,29 +20,64 @@ import {
   ArrowRight,
   BookOpen 
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const CompanyDashboard = () => {
   const { user } = useAuth();
+  const { students, staff, sessions } = useData();
+  const navigate = useNavigate();
 
-  // Mock data - replace with actual API calls
+  const [addStudentOpen, setAddStudentOpen] = useState(false);
+  const [createSessionOpen, setCreateSessionOpen] = useState(false);
+  const [startSessionOpen, setStartSessionOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  // Calculate stats from actual data
   const stats = {
-    totalStudents: 156,
-    activeStaff: 12,
-    todaySessions: 24,
-    completionRate: 87,
+    totalStudents: students.length,
+    activeStaff: staff.filter(s => s.status === 'active').length,
+    todaySessions: sessions.length,
+    completionRate: Math.round((sessions.filter(s => s.status === 'completed').length / sessions.length) * 100) || 0,
   };
 
-  const upcomingSessions = [
-    { id: '1', studentName: 'Ahmed Ali', time: '09:00 AM', surah: 'Surah Al-Baqarah (Ayah 142-150)', status: 'ready' as const },
-    { id: '2', studentName: 'Fatima Hassan', time: '10:30 AM', surah: 'Surah Al-Imran (Ayah 1-20)', status: 'scheduled' as const },
-    { id: '3', studentName: 'Omar Khalid', time: '02:00 PM', surah: 'Surah An-Nisa (Ayah 23-35)', status: 'scheduled' as const },
-  ];
+  const upcomingSessions = sessions
+    .filter(s => s.status !== 'completed')
+    .slice(0, 3)
+    .map(s => ({
+      id: s.id,
+      studentName: s.student,
+      time: s.time,
+      surah: `Surah ${s.surah}`,
+      status: s.status as 'scheduled' | 'ready' | 'in_progress' | 'completed',
+    }));
 
-  const topStudents = [
-    { name: 'Aisha Rahman', currentSurah: 'Surah Al-Kahf', progress: 92, lastSession: 'Today' },
-    { name: 'Yusuf Ahmed', currentSurah: 'Surah Maryam', progress: 88, lastSession: 'Yesterday' },
-    { name: 'Khadija Malik', currentSurah: 'Surah Taha', progress: 85, lastSession: 'Today' },
-  ];
+  const topStudents = students
+    .filter(s => s.status === 'active')
+    .sort((a, b) => b.progress - a.progress)
+    .slice(0, 3)
+    .map(s => ({
+      ...s,
+      currentSurah: `Surah ${s.currentSurah}`,
+      lastSession: 'Today',
+    }));
+
+  const handleStartSession = (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      setSelectedSession(session);
+      setStartSessionOpen(true);
+    }
+  };
+
+  const handleViewStudent = (studentName: string) => {
+    const student = students.find(s => s.name === studentName);
+    if (student) {
+      setSelectedStudent(student);
+      setProfileOpen(true);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -89,7 +131,12 @@ const CompanyDashboard = () => {
                 <Calendar className="w-5 h-5 text-primary" />
                 Today's Sessions
               </CardTitle>
-              <Button variant="ghost" size="sm" className="gap-1 text-primary">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="gap-1 text-primary"
+                onClick={() => navigate('/sessions')}
+              >
                 View All
                 <ArrowRight className="w-4 h-4" />
               </Button>
@@ -99,9 +146,12 @@ const CompanyDashboard = () => {
                 <SessionCard
                   key={session.id}
                   {...session}
-                  onStart={() => console.log('Start session:', session.id)}
+                  onStart={() => handleStartSession(session.id)}
                 />
               ))}
+              {upcomingSessions.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">No upcoming sessions</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -114,7 +164,12 @@ const CompanyDashboard = () => {
                 <Trophy className="w-5 h-5 text-secondary" />
                 Top Students
               </CardTitle>
-              <Button variant="ghost" size="sm" className="gap-1 text-primary">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="gap-1 text-primary"
+                onClick={() => navigate('/students')}
+              >
                 View All
                 <ArrowRight className="w-4 h-4" />
               </Button>
@@ -124,7 +179,7 @@ const CompanyDashboard = () => {
                 <StudentListItem
                   key={index}
                   {...student}
-                  onClick={() => console.log('View student:', student.name)}
+                  onClick={() => handleViewStudent(student.name)}
                 />
               ))}
             </CardContent>
@@ -146,13 +201,28 @@ const CompanyDashboard = () => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm">Add Student</Button>
-              <Button size="sm" variant="outline">Schedule Session</Button>
-              <Button size="sm" variant="outline">View Reports</Button>
+              <Button size="sm" onClick={() => setAddStudentOpen(true)}>Add Student</Button>
+              <Button size="sm" variant="outline" onClick={() => setCreateSessionOpen(true)}>
+                Schedule Session
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate('/reports')}>
+                View Reports
+              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialogs */}
+      <AddStudentDialog open={addStudentOpen} onOpenChange={setAddStudentOpen} />
+      <CreateSessionDialog open={createSessionOpen} onOpenChange={setCreateSessionOpen} />
+      <StartSessionDialog open={startSessionOpen} onOpenChange={setStartSessionOpen} session={selectedSession} />
+      <ProfileDetailDialog 
+        open={profileOpen} 
+        onOpenChange={setProfileOpen} 
+        type="student"
+        data={selectedStudent}
+      />
     </div>
   );
 };

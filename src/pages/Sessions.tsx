@@ -1,28 +1,44 @@
+import { useState } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CreateSessionDialog } from '@/components/dialogs/CreateSessionDialog';
+import { StartSessionDialog } from '@/components/dialogs/StartSessionDialog';
+import { EndSessionDialog } from '@/components/dialogs/EndSessionDialog';
+import { JoinSessionDialog } from '@/components/dialogs/JoinSessionDialog';
+import { Session } from '@/hooks/useSimulatedData';
 import { 
   Calendar as CalendarIcon, 
   Plus, 
   Clock,
   Play,
   CheckCircle,
-  BookOpen
+  BookOpen,
+  Video
 } from 'lucide-react';
 
 const Sessions = () => {
   const { user } = useAuth();
+  const { sessions } = useData();
   const isCompany = user?.role === 'company';
 
-  const sessions = [
-    { id: '1', student: 'Ahmed Ali', tutor: 'Ahmad Hassan', time: '09:00 AM', duration: '45 min', surah: 'Al-Baqarah (142-150)', status: 'completed' },
-    { id: '2', student: 'Fatima Hassan', tutor: 'Ahmad Hassan', time: '10:30 AM', duration: '45 min', surah: 'Al-Imran (1-20)', status: 'in_progress' },
-    { id: '3', student: 'Omar Khalid', tutor: 'Sara Ahmed', time: '02:00 PM', duration: '45 min', surah: 'An-Nisa (23-35)', status: 'ready' },
-    { id: '4', student: 'Maryam Yusuf', tutor: 'Ahmad Hassan', time: '03:30 PM', duration: '45 min', surah: 'Al-Maidah (1-10)', status: 'scheduled' },
-  ];
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [startDialogOpen, setStartDialogOpen] = useState(false);
+  const [endDialogOpen, setEndDialogOpen] = useState(false);
+  const [joinDialogOpen, setJoinDialogOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+
+  // Staff can only see their assigned sessions
+  const filteredSessions = sessions.filter(session => {
+    if (!isCompany) {
+      return session.tutor === user?.name;
+    }
+    return true;
+  });
 
   const getStatusBadge = (status: string) => {
     const config = {
@@ -33,6 +49,21 @@ const Sessions = () => {
     }[status] || { label: status, className: '' };
 
     return <Badge variant="outline" className={config.className}>{config.label}</Badge>;
+  };
+
+  const handleStart = (session: Session) => {
+    setSelectedSession(session);
+    setStartDialogOpen(true);
+  };
+
+  const handleEnd = (session: Session) => {
+    setSelectedSession(session);
+    setEndDialogOpen(true);
+  };
+
+  const handleJoin = (session: Session) => {
+    setSelectedSession(session);
+    setJoinDialogOpen(true);
   };
 
   return (
@@ -47,7 +78,7 @@ const Sessions = () => {
             </p>
           </div>
           {isCompany && (
-            <Button className="gap-2 w-fit">
+            <Button className="gap-2 w-fit" onClick={() => setCreateDialogOpen(true)}>
               <Plus className="w-4 h-4" />
               Schedule Session
             </Button>
@@ -72,7 +103,7 @@ const Sessions = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {sessions.map((session) => (
+                  {filteredSessions.map((session) => (
                     <div 
                       key={session.id}
                       className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-muted/50 border"
@@ -101,21 +132,45 @@ const Sessions = () => {
                         <div className="flex items-center gap-2">
                           {getStatusBadge(session.status)}
                           {(session.status === 'ready' || session.status === 'scheduled') && (
-                            <Button size="sm" className="gap-1.5">
+                            <Button size="sm" className="gap-1.5" onClick={() => handleStart(session)}>
                               <Play className="w-3.5 h-3.5" />
                               Start
                             </Button>
                           )}
                           {session.status === 'in_progress' && (
-                            <Button size="sm" variant="outline" className="gap-1.5 border-success text-success hover:bg-success/10">
-                              <CheckCircle className="w-3.5 h-3.5" />
-                              End
-                            </Button>
+                            <>
+                              {isCompany && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="gap-1.5 border-info text-info hover:bg-info/10"
+                                  onClick={() => handleJoin(session)}
+                                >
+                                  <Video className="w-3.5 h-3.5" />
+                                  Join
+                                </Button>
+                              )}
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="gap-1.5 border-success text-success hover:bg-success/10"
+                                onClick={() => handleEnd(session)}
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                End
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
                     </div>
                   ))}
+                  
+                  {filteredSessions.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No sessions scheduled for today.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -138,6 +193,12 @@ const Sessions = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Dialogs */}
+      <CreateSessionDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+      <StartSessionDialog open={startDialogOpen} onOpenChange={setStartDialogOpen} session={selectedSession} />
+      <EndSessionDialog open={endDialogOpen} onOpenChange={setEndDialogOpen} session={selectedSession} />
+      <JoinSessionDialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen} session={selectedSession} />
     </DashboardLayout>
   );
 };
