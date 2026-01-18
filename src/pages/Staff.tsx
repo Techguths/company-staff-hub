@@ -1,11 +1,18 @@
+import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useData } from '@/contexts/DataContext';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AddStaffDialog } from '@/components/dialogs/AddStaffDialog';
+import { EditStaffDialog } from '@/components/dialogs/EditStaffDialog';
+import { ProfileDetailDialog } from '@/components/dialogs/ProfileDetailDialog';
+import { StaffMember } from '@/hooks/useSimulatedData';
 import { 
   UserCog, 
   Search, 
@@ -13,24 +20,49 @@ import {
   Filter,
   MoreVertical,
   Mail,
-  Phone
+  Phone,
+  Pencil,
+  Trash2,
+  User
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const Staff = () => {
   const { user } = useAuth();
+  const { staff, deleteStaff } = useData();
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
 
   // Only company admins can access this page
   if (user?.role !== 'company') {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const staffMembers = [
-    { id: '1', name: 'Ahmad Hassan', email: 'ahmad@academy.com', phone: '+1 234 567 890', role: 'Senior Tutor', students: 18, status: 'active' },
-    { id: '2', name: 'Sara Ahmed', email: 'sara@academy.com', phone: '+1 234 567 891', role: 'Tutor', students: 15, status: 'active' },
-    { id: '3', name: 'Khalid Noor', email: 'khalid@academy.com', phone: '+1 234 567 892', role: 'Tutor', students: 12, status: 'active' },
-    { id: '4', name: 'Amina Yusuf', email: 'amina@academy.com', phone: '+1 234 567 893', role: 'Coordinator', students: 0, status: 'active' },
-    { id: '5', name: 'Omar Farooq', email: 'omar@academy.com', phone: '+1 234 567 894', role: 'Tutor', students: 10, status: 'inactive' },
-  ];
+  const filteredStaff = staff.filter(s => 
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.role.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleEdit = (staffMember: StaffMember) => {
+    setSelectedStaff(staffMember);
+    setEditDialogOpen(true);
+  };
+
+  const handleViewProfile = (staffMember: StaffMember) => {
+    setSelectedStaff(staffMember);
+    setProfileDialogOpen(true);
+  };
+
+  const handleDelete = (staffMember: StaffMember) => {
+    if (window.confirm(`Are you sure you want to remove ${staffMember.name}?`)) {
+      deleteStaff(staffMember.id);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -46,7 +78,7 @@ const Staff = () => {
               Manage your tutors and staff members
             </p>
           </div>
-          <Button className="gap-2 w-fit">
+          <Button className="gap-2 w-fit" onClick={() => setAddDialogOpen(true)}>
             <Plus className="w-4 h-4" />
             Add Staff
           </Button>
@@ -56,7 +88,12 @@ const Staff = () => {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search staff..." className="pl-10" />
+            <Input 
+              placeholder="Search staff..." 
+              className="pl-10" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
           <Button variant="outline" className="gap-2">
             <Filter className="w-4 h-4" />
@@ -66,59 +103,101 @@ const Staff = () => {
 
         {/* Staff Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {staffMembers.map((staff) => (
-            <Card key={staff.id} className="hover:shadow-md transition-shadow">
+          {filteredStaff.map((staffMember) => (
+            <Card key={staffMember.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
+                  <div 
+                    className="flex items-center gap-3 cursor-pointer"
+                    onClick={() => handleViewProfile(staffMember)}
+                  >
                     <Avatar className="w-12 h-12">
                       <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                        {staff.name.split(' ').map(n => n[0]).join('')}
+                        {staffMember.name.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium text-foreground">{staff.name}</p>
+                      <p className="font-medium text-foreground hover:text-primary transition-colors">
+                        {staffMember.name}
+                      </p>
                       <Badge variant="outline" className="mt-1 text-xs">
-                        {staff.role}
+                        {staffMember.role}
                       </Badge>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-popover">
+                      <DropdownMenuItem onClick={() => handleViewProfile(staffMember)}>
+                        <User className="w-4 h-4 mr-2" />
+                        View Profile
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEdit(staffMember)}>
+                        <Pencil className="w-4 h-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleDelete(staffMember)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Remove
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Mail className="w-4 h-4" />
-                    <span className="truncate">{staff.email}</span>
+                    <span className="truncate">{staffMember.email}</span>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Phone className="w-4 h-4" />
-                    <span>{staff.phone}</span>
+                    <span>{staffMember.phone}</span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between mt-4 pt-4 border-t">
                   <div className="text-sm">
                     <span className="text-muted-foreground">Assigned: </span>
-                    <span className="font-medium text-foreground">{staff.students} students</span>
+                    <span className="font-medium text-foreground">{staffMember.students} students</span>
                   </div>
                   <Badge 
                     variant="outline" 
-                    className={staff.status === 'active' 
+                    className={staffMember.status === 'active' 
                       ? 'bg-success/10 text-success border-success/30' 
                       : 'bg-muted text-muted-foreground'
                     }
                   >
-                    {staff.status}
+                    {staffMember.status}
                   </Badge>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
+
+        {filteredStaff.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground">
+            No staff members found matching your search.
+          </div>
+        )}
       </div>
+
+      {/* Dialogs */}
+      <AddStaffDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
+      <EditStaffDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} staff={selectedStaff} />
+      <ProfileDetailDialog 
+        open={profileDialogOpen} 
+        onOpenChange={setProfileDialogOpen} 
+        type="staff"
+        data={selectedStaff}
+      />
     </DashboardLayout>
   );
 };

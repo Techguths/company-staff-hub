@@ -1,10 +1,16 @@
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useData } from '@/contexts/DataContext';
 import StatCard from './StatCard';
 import SessionCard from './SessionCard';
 import StudentListItem from './StudentListItem';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { StartSessionDialog } from '@/components/dialogs/StartSessionDialog';
+import { EndSessionDialog } from '@/components/dialogs/EndSessionDialog';
+import { ProfileDetailDialog } from '@/components/dialogs/ProfileDetailDialog';
+import { Session, Student } from '@/hooks/useSimulatedData';
 import { 
   GraduationCap, 
   Calendar, 
@@ -14,31 +20,66 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const StaffDashboard = () => {
   const { user } = useAuth();
+  const { students, sessions } = useData();
+  const navigate = useNavigate();
 
-  // Mock data - replace with actual API calls
+  const [startSessionOpen, setStartSessionOpen] = useState(false);
+  const [endSessionOpen, setEndSessionOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  // Filter data for staff's assigned students/sessions
+  const assignedStudents = students.filter(s => s.tutor === user?.name);
+  const assignedSessions = sessions.filter(s => s.tutor === user?.name);
+
+  // Calculate stats from actual data
   const stats = {
-    assignedStudents: 18,
-    todaySessions: 6,
-    pendingNotes: 2,
-    completedToday: 4,
+    assignedStudents: assignedStudents.length,
+    todaySessions: assignedSessions.length,
+    completedToday: assignedSessions.filter(s => s.status === 'completed').length,
+    pendingNotes: assignedSessions.filter(s => s.status === 'completed' && !s.notes).length,
   };
 
-  const todaySessions = [
-    { id: '1', studentName: 'Ahmed Ali', time: '09:00 AM', surah: 'Surah Al-Baqarah (Ayah 142-150)', status: 'completed' as const },
-    { id: '2', studentName: 'Fatima Hassan', time: '10:30 AM', surah: 'Surah Al-Imran (Ayah 1-20)', status: 'in_progress' as const },
-    { id: '3', studentName: 'Omar Khalid', time: '02:00 PM', surah: 'Surah An-Nisa (Ayah 23-35)', status: 'ready' as const },
-    { id: '4', studentName: 'Maryam Yusuf', time: '03:30 PM', surah: 'Surah Al-Maidah (Ayah 1-10)', status: 'scheduled' as const },
-  ];
+  const todaySessions = assignedSessions.map(s => ({
+    id: s.id,
+    studentName: s.student,
+    time: s.time,
+    surah: `Surah ${s.surah}`,
+    status: s.status as 'scheduled' | 'ready' | 'in_progress' | 'completed',
+  }));
 
-  const assignedStudents = [
-    { name: 'Ahmed Ali', currentSurah: 'Surah Al-Baqarah', progress: 45, lastSession: 'Today' },
-    { name: 'Fatima Hassan', currentSurah: 'Surah Al-Imran', progress: 32, lastSession: 'Today' },
-    { name: 'Omar Khalid', currentSurah: 'Surah An-Nisa', progress: 78, lastSession: 'Yesterday' },
-    { name: 'Maryam Yusuf', currentSurah: 'Surah Al-Maidah', progress: 15, lastSession: '2 days ago' },
-  ];
+  const staffStudents = assignedStudents.slice(0, 3).map(s => ({
+    ...s,
+    currentSurah: `Surah ${s.currentSurah}`,
+    lastSession: 'Today',
+  }));
+
+  const handleStartSession = (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      setSelectedSession(session);
+      setStartSessionOpen(true);
+    }
+  };
+
+  const handleViewStudent = (studentName: string) => {
+    const student = students.find(s => s.name === studentName);
+    if (student) {
+      setSelectedStudent(student);
+      setProfileOpen(true);
+    }
+  };
+
+  const handleCompleteNotes = () => {
+    toast.info('Opening pending notes...');
+    navigate('/sessions');
+  };
 
   return (
     <div className="space-y-6">
@@ -95,7 +136,12 @@ const StaffDashboard = () => {
                 <Clock className="w-5 h-5 text-primary" />
                 Today's Schedule
               </CardTitle>
-              <Button variant="ghost" size="sm" className="gap-1 text-primary">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="gap-1 text-primary"
+                onClick={() => navigate('/sessions')}
+              >
                 View Week
                 <ArrowRight className="w-4 h-4" />
               </Button>
@@ -105,9 +151,12 @@ const StaffDashboard = () => {
                 <SessionCard
                   key={session.id}
                   {...session}
-                  onStart={() => console.log('Start session:', session.id)}
+                  onStart={() => handleStartSession(session.id)}
                 />
               ))}
+              {todaySessions.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">No sessions scheduled for today</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -120,19 +169,27 @@ const StaffDashboard = () => {
                 <GraduationCap className="w-5 h-5 text-primary" />
                 My Students
               </CardTitle>
-              <Button variant="ghost" size="sm" className="gap-1 text-primary">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="gap-1 text-primary"
+                onClick={() => navigate('/students')}
+              >
                 View All
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">
-              {assignedStudents.slice(0, 3).map((student, index) => (
+              {staffStudents.map((student, index) => (
                 <StudentListItem
                   key={index}
                   {...student}
-                  onClick={() => console.log('View student:', student.name)}
+                  onClick={() => handleViewStudent(student.name)}
                 />
               ))}
+              {staffStudents.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">No students assigned</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -154,7 +211,12 @@ const StaffDashboard = () => {
                   </p>
                 </div>
               </div>
-              <Button size="sm" variant="outline" className="border-warning text-warning hover:bg-warning/10">
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="border-warning text-warning hover:bg-warning/10"
+                onClick={handleCompleteNotes}
+              >
                 Complete Notes
               </Button>
             </div>
@@ -175,12 +237,22 @@ const StaffDashboard = () => {
                 Access Quran text, Tajweed rules, and memorization guides
               </p>
             </div>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => toast.info('Reference library coming soon')}>
               Open Reference
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialogs */}
+      <StartSessionDialog open={startSessionOpen} onOpenChange={setStartSessionOpen} session={selectedSession} />
+      <EndSessionDialog open={endSessionOpen} onOpenChange={setEndSessionOpen} session={selectedSession} />
+      <ProfileDetailDialog 
+        open={profileOpen} 
+        onOpenChange={setProfileOpen} 
+        type="student"
+        data={selectedStudent}
+      />
     </div>
   );
 };

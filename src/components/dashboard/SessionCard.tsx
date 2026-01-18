@@ -1,4 +1,4 @@
-import { Clock, Users, BookOpen, Play } from 'lucide-react';
+import { Clock, BookOpen, Play, CheckCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ interface SessionCardProps {
   surah: string;
   status: 'scheduled' | 'ready' | 'in_progress' | 'completed';
   onStart?: () => void;
+  onEnd?: () => void;
 }
 
 const statusConfig = {
@@ -20,7 +21,7 @@ const statusConfig = {
   completed: { label: 'Completed', className: 'bg-primary/20 text-primary border-primary/30' },
 };
 
-const SessionCard = ({ studentName, time, surah, status, onStart }: SessionCardProps) => {
+const SessionCard = ({ studentName, time, surah, status, onStart, onEnd }: SessionCardProps) => {
   const config = statusConfig[status];
 
   return (
@@ -46,10 +47,21 @@ const SessionCard = ({ studentName, time, surah, status, onStart }: SessionCardP
             <Badge variant="outline" className={cn('font-medium', config.className)}>
               {config.label}
             </Badge>
-            {(status === 'ready' || status === 'scheduled') && (
+            {(status === 'ready' || status === 'scheduled') && onStart && (
               <Button size="sm" onClick={onStart} className="gap-1.5">
                 <Play className="w-3.5 h-3.5" />
                 Start
+              </Button>
+            )}
+            {status === 'in_progress' && onEnd && (
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={onEnd}
+                className="gap-1.5 border-success text-success hover:bg-success/10"
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                End
               </Button>
             )}
           </div>

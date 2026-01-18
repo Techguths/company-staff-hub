@@ -1,30 +1,68 @@
+import { useState } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useData } from '@/contexts/DataContext';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AddStudentDialog } from '@/components/dialogs/AddStudentDialog';
+import { EditStudentDialog } from '@/components/dialogs/EditStudentDialog';
+import { ProfileDetailDialog } from '@/components/dialogs/ProfileDetailDialog';
+import { Student } from '@/hooks/useSimulatedData';
 import { 
   GraduationCap, 
   Search, 
   Plus, 
   Filter,
   MoreVertical,
-  BookOpen
+  BookOpen,
+  Pencil,
+  Trash2,
+  User
 } from 'lucide-react';
 
 const Students = () => {
   const { user } = useAuth();
+  const { students, deleteStudent } = useData();
   const isCompany = user?.role === 'company';
 
-  const students = [
-    { id: '1', name: 'Ahmed Ali', email: 'ahmed@email.com', currentSurah: 'Al-Baqarah', progress: 45, status: 'active', tutor: 'Ahmad Hassan' },
-    { id: '2', name: 'Fatima Hassan', email: 'fatima@email.com', currentSurah: 'Al-Imran', progress: 32, status: 'active', tutor: 'Ahmad Hassan' },
-    { id: '3', name: 'Omar Khalid', email: 'omar@email.com', currentSurah: 'An-Nisa', progress: 78, status: 'active', tutor: 'Sara Ahmed' },
-    { id: '4', name: 'Maryam Yusuf', email: 'maryam@email.com', currentSurah: 'Al-Maidah', progress: 15, status: 'inactive', tutor: 'Ahmad Hassan' },
-    { id: '5', name: 'Aisha Rahman', email: 'aisha@email.com', currentSurah: 'Al-Kahf', progress: 92, status: 'active', tutor: 'Sara Ahmed' },
-  ];
+  const [searchQuery, setSearchQuery] = useState('');
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  // Staff can only see their assigned students
+  const filteredStudents = students.filter(student => {
+    const matchesSearch = 
+      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.currentSurah.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (!isCompany) {
+      return matchesSearch && student.tutor === user?.name;
+    }
+    return matchesSearch;
+  });
+
+  const handleEdit = (student: Student) => {
+    setSelectedStudent(student);
+    setEditDialogOpen(true);
+  };
+
+  const handleViewProfile = (student: Student) => {
+    setSelectedStudent(student);
+    setProfileDialogOpen(true);
+  };
+
+  const handleDelete = (student: Student) => {
+    if (window.confirm(`Are you sure you want to remove ${student.name}?`)) {
+      deleteStudent(student.id);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -38,7 +76,7 @@ const Students = () => {
             </p>
           </div>
           {isCompany && (
-            <Button className="gap-2 w-fit">
+            <Button className="gap-2 w-fit" onClick={() => setAddDialogOpen(true)}>
               <Plus className="w-4 h-4" />
               Add Student
             </Button>
@@ -49,7 +87,12 @@ const Students = () => {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search students..." className="pl-10" />
+            <Input 
+              placeholder="Search students..." 
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
           <Button variant="outline" className="gap-2">
             <Filter className="w-4 h-4" />
@@ -59,24 +102,52 @@ const Students = () => {
 
         {/* Students Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {students.map((student) => (
-            <Card key={student.id} className="hover:shadow-md transition-shadow cursor-pointer">
+          {filteredStudents.map((student) => (
+            <Card key={student.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
+                  <div 
+                    className="flex items-center gap-3 cursor-pointer"
+                    onClick={() => handleViewProfile(student)}
+                  >
                     <Avatar className="w-12 h-12">
                       <AvatarFallback className="bg-primary/10 text-primary font-medium">
                         {student.name.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium text-foreground">{student.name}</p>
+                      <p className="font-medium text-foreground hover:text-primary transition-colors">
+                        {student.name}
+                      </p>
                       <p className="text-sm text-muted-foreground">{student.email}</p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-popover">
+                      <DropdownMenuItem onClick={() => handleViewProfile(student)}>
+                        <User className="w-4 h-4 mr-2" />
+                        View Profile
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEdit(student)}>
+                        <Pencil className="w-4 h-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      {isCompany && (
+                        <DropdownMenuItem 
+                          onClick={() => handleDelete(student)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Remove
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 <div className="space-y-3">
@@ -117,7 +188,23 @@ const Students = () => {
             </Card>
           ))}
         </div>
+
+        {filteredStudents.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground">
+            No students found matching your search.
+          </div>
+        )}
       </div>
+
+      {/* Dialogs */}
+      <AddStudentDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
+      <EditStudentDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} student={selectedStudent} />
+      <ProfileDetailDialog 
+        open={profileDialogOpen} 
+        onOpenChange={setProfileDialogOpen} 
+        type="student"
+        data={selectedStudent}
+      />
     </DashboardLayout>
   );
 };
